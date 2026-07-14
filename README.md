@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapleStory Worlds Artale 虛擬轉蛋機</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: #1e1e1e;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        h1 {
+            text-align: center;
+            color: #ffca28;
+            margin-bottom: 10px;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        @media (max-width: 600px) {
+            .control-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #ffca28;
+        }
+        select, input, button {
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background-color: #2a2a2a;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        select:focus, input:focus {
+            border-color: #ffca28;
+        }
+        button {
+            grid-column: span 2;
+            background-color: #ffca28;
+            color: #121212;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        @media (max-width: 600px) {
+            button {
+                grid-column: span 1;
+            }
+        }
+        button:hover {
+            background-color: #ffe082;
+        }
+        button:active {
+            background-color: #ffa000;
+        }
+        .results-section {
+            margin-top: 20px;
+            border-top: 1px dashed #444;
+            padding-top: 20px;
+        }
+        .summary {
+            background-color: #262626;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 5px solid #ffca28;
+        }
+        .summary p {
+            margin: 5px 0;
+        }
+        .table-wrapper {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 6px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #333;
+        }
+        th {
+            background-color: #2a2a2a;
+            position: sticky;
+            top: 0;
+            color: #ffca28;
+        }
+        tr:nth-child(even) {
+            background-color: #1a1a1a;
+        }
+        .highlight {
+            color: #ff7675;
+            font-weight: bold;
+        }
+        .rare {
+            color: #fdcb6e;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>MapleStory Worlds Artale 模擬轉蛋機</h1>
+    <p class="subtitle">依據官方公布之「戒指精選卷軸轉蛋券 I & II」機率製作</p>
+
+    <div class="control-panel">
+        <div class="form-group">
+            <label for="gacha-type">選擇抽獎項目</label>
+            <select id="gacha-type">
+                <option value="type1">戒指精選卷軸轉蛋券 I（活動限定）</option>
+                <option value="type2">戒指精選卷軸轉蛋券 II（活動限定）</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="draw-count">輸入抽獎次數 (上限 1,000,000)</label>
+            <input type="number" id="draw-count" value="100" min="1" max="1000000">
+        </div>
+        <button id="draw-btn" onclick="runGacha()">開始抽獎 🎰</button>
+    </div>
+
+    <div class="results-section" id="results-section" style="display: none;">
+        <div class="summary">
+            <h3>抽獎結果統計</h3>
+            <p id="total-drawn-text"></p>
+            <p id="rare-count-text"></p>
+        </div>
+        
+        <h3>已獲得品項明細 (未抽中之道具不予顯示)</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>道具名稱</th>
+                        <th>獲得數量</th>
+                        <th>實際佔比</th>
+                        <th>官方機率</th>
+                    </tr>
+                </thead>
+                <tbody id="result-table-body">
+                    <!-- 結果將動態插入 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// 1. 戒指精選卷軸轉蛋券 I 數據設定
+const poolType1 = [
+    { name: "戒指卷軸箱", rate: 0.0008333331607 },
+    { name: "臉部裝飾力量卷軸30%", rate: 0.008333331607 },
+    { name: "臉部裝飾幸運卷軸30%", rate: 0.008333331607 },
+    { name: "眼部裝飾力量卷軸30%", rate: 0.01249999968 },
+    { name: "腰帶敏捷卷軸30%", rate: 0.01249999968 },
+    { name: "墜飾力量卷軸30%", rate: 0.01249999968 },
+    { name: "眼部裝飾幸運卷軸30%", rate: 0.01249999968 },
+    { name: "腰帶幸運卷軸30%", rate: 0.02000000222 },
+    { name: "墜飾智力卷軸30%", rate: 0.02000000222 },
+    { name: "套服力量詛咒卷軸30%", rate: 0.02000000222 },
+    { name: "下衣敏捷性卷軸30%", rate: 0.02000000222 },
+    { name: "耳環智力卷軸30%", rate: 0.02000000222 },
+    { name: "套服幸運詛咒卷軸30%", rate: 0.03333333552 },
+    { name: "頭盔智力卷軸30%", rate: 0.03333333552 },
+    { name: "披風敏捷性卷軸30%", rate: 0.03333333552 },
+    { name: "上衣力量卷軸30%", rate: 0.03333333552 },
+    { name: "短杖魔力卷軸30%", rate: 0.03333333552 },
+    { name: "套服敏捷詛咒卷軸30%", rate: 0.03333333552 },
+    { name: "披風智力卷軸30%", rate: 0.0888888917 },
+    { name: "矛攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "短劍攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "指虎攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "鞋子跳躍力卷軸30%", rate: 0.0888888917 },
+    { name: "指虎命中率卷軸30%", rate: 0.0888888917 },
+    { name: "弩攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "鞋子移動速度卷軸30%", rate: 0.0888888917 },
+    { name: "下衣跳躍卷軸30%", rate: 0.0888888917 },
+    { name: "下衣體力卷軸30%", rate: 1.758946425 },
+    { name: "單手劍命中率卷軸30%", rate: 1.758946425 },
+    { name: "手套體力卷軸30%", rate: 1.758946425 },
+    { name: "單手劍攻擊力卷軸30%", rate: 1.758946425 },
+    { name: "盾牌防禦力卷軸30%", rate: 1.758946425 },
+    { name: "下衣防禦力卷軸30%", rate: 1.758946425 },
+    { name: "上衣防禦力卷軸30%", rate: 2.058946425 },
+    { name: "頭盔防禦卷軸30%", rate: 2.058946425 },
+    { name: "披風物理防禦力卷軸30%", rate: 2.058946425 },
+    { name: "單手斧命中率卷軸30%", rate: 2.058946425 },
+    { name: "單手棍命中率卷軸30%", rate: 2.058946425 },
+    { name: "雙手棍攻擊力卷軸30%", rate: 2.058946425 },
+    { name: "披風魔法防禦力卷軸30%", rate: 2.058946425 },
+    { name: "槍命中率卷軸30%", rate: 2.058946425 },
+    { name: "超級藥水10個(可交易)", rate: 6.0214375 },
+    { name: "超級藥水15個(可交易)", rate: 5.8714375 },
+    { name: "超級藥水20個(可交易)", rate: 5.7214375 },
+    { name: "黃昏之露10個(可交易)", rate: 6.1714375 },
+    { name: "黃昏之露30個(可交易)", rate: 6.0214375 },
+    { name: "黃昏之露50個(可交易)", rate: 5.8714375 },
+    { name: "清晨之露20個(可交易)", rate: 6.1714375 },
+    { name: "清晨之露40個(可交易)", rate: 6.0214375 },
+    { name: "清晨之露60個(可交易)", rate: 5.8714375 },
+    { name: "馴鹿奶30個(可交易)", rate: 6.1714375 },
+    { name: "馴鹿奶50個(可交易)", rate: 6.0214375 },
+    { name: "馴鹿奶70個(可交易)", rate: 5.8714375 }
+];
+
+// 2. 戒指精選卷軸轉蛋券 II 數據設定
+const poolType2 = [
+    { name: "戒指卷軸箱", rate: 0.0008333331607 },
+    { name: "臉部裝飾敏捷卷軸30%", rate: 0.008333331607 },
+    { name: "臉部裝飾智力卷軸30%", rate: 0.008333331607 },
+    { name: "腰帶力量卷軸30%", rate: 0.01249999968 },
+    { name: "眼部裝飾智力卷軸30%", rate: 0.01249999968 },
+    { name: "墜飾敏捷卷軸30%", rate: 0.01249999968 },
+    { name: "眼部裝飾敏捷卷軸30%", rate: 0.01249999968 },
+    { name: "墜飾幸運卷軸30%", rate: 0.02000000222 },
+    { name: "腰帶智力卷軸30%", rate: 0.02000000222 },
+    { name: "耳環敏捷卷軸30%", rate: 0.02000000222 },
+    { name: "頭盔敏捷卷軸30%", rate: 0.02000000222 },
+    { name: "套服智力詛咒卷軸30%", rate: 0.02000000222 },
+    { name: "拳套攻擊力卷軸30%", rate: 0.03333333552 },
+    { name: "手套攻擊力卷軸30%", rate: 0.03333333552 },
+    { name: "披風幸運卷軸30%", rate: 0.03333333552 },
+    { name: "雙手劍攻擊力卷軸30%", rate: 0.03333333552 },
+    { name: "上衣幸運卷軸30%", rate: 0.03333333552 },
+    { name: "披風力量卷軸30%", rate: 0.03333333552 },
+    { name: "長杖魔力卷軸30%", rate: 0.0888888917 },
+    { name: "弓攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "耳環幸運卷軸30%", rate: 0.0888888917 },
+    { name: "盾牌幸運卷軸30%", rate: 0.0888888917 },
+    { name: "手套敏捷性卷軸30%", rate: 0.0888888917 },
+    { name: "槍攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "火槍攻擊力卷軸30%", rate: 0.0888888917 },
+    { name: "盾牌力量卷軸30%", rate: 0.0888888917 },
+    { name: "耳環體力卷軸30%", rate: 0.0888888917 },
+    { name: "鞋子敏捷性卷軸30%", rate: 1.758946425 },
+    { name: "頭盔體力卷軸30%", rate: 1.758946425 },
+    { name: "披風體力卷軸30%", rate: 1.758946425 },
+    { name: "雙手斧攻擊力卷軸30%", rate: 1.758946425 },
+    { name: "雙手劍命中率卷軸30%", rate: 1.758946425 },
+    { name: "單手斧攻擊力卷軸30%", rate: 1.758946425 },
+    { name: "上衣體力卷軸30%", rate: 2.058946425 },
+    { name: "套服防禦詛咒卷軸30%", rate: 2.058946425 },
+    { name: "披風魔力卷軸30%", rate: 2.058946425 },
+    { name: "單手棍攻擊力卷軸30%", rate: 2.058946425 },
+    { name: "雙手斧命中率卷軸30%", rate: 2.058946425 },
+    { name: "盾牌體力卷軸30%", rate: 2.058946425 },
+    { name: "雙手棍命中率卷軸30%", rate: 2.058946425 },
+    { name: "矛命中率卷軸30%", rate: 2.058946425 },
+    { name: "超級藥水10個(可交易)", rate: 6.0214375 },
+    { name: "超級藥水15個(可交易)", rate: 5.8714375 },
+    { name: "超級藥水20個(可交易)", rate: 5.7214375 },
+    { name: "黃昏之露10個(可交易)", rate: 6.1714375 },
+    { name: "黃昏之露30個(可交易)", rate: 6.0214375 },
+    { name: "黃昏之露50個(可交易)", rate: 5.8714375 },
+    { name: "清晨之露20個(可交易)", rate: 6.1714375 },
+    { name: "清晨之露40個(可交易)", rate: 6.0214375 },
+    { name: "清晨之露60個(可交易)", rate: 5.8714375 },
+    { name: "馴鹿奶30個(可交易)", rate: 6.1714375 },
+    { name: "馴鹿奶50個(可交易)", rate: 6.0214375 },
+    { name: "馴鹿奶70個(可交易)", rate: 5.8714375 }
+];
+
+// 預先計算累積機率區間以提升大量抽取效率
+function preparePool(pool) {
+    let accumulated = 0;
+    return pool.map(item => {
+        accumulated += item.rate;
+        return { ...item, threshold: accumulated };
+    });
+}
+
+const preparedPool1 = preparePool(poolType1);
+const preparedPool2 = preparePool(poolType2);
+
+function runGacha() {
+    const type = document.getElementById("gacha-type").value;
+    let count = parseInt(document.getElementById("draw-count").value);
+    
+    if (isNaN(count) || count < 1) {
+        alert("請輸入有效的抽獎次數！");
+        return;
+    }
+    if (count > 1000000) {
+        alert("為避免瀏覽器卡死，單次抽取上限為 1,000,000 次！");
+        count = 1000000;
+        document.getElementById("draw-count").value = 1000000;
+    }
+
+    const activePool = type === "type1" ? preparedPool1 : preparedPool2;
+    
+    // 初始化統計
+    const stats = {};
+    activePool.forEach(item => {
+        stats[item.name] = 0;
+    });
+
+    // 進行抽獎
+    for (let i = 0; i < count; i++) {
+        const rand = Math.random() * 100;
+        
+        // 二分搜尋法
+        let low = 0;
+        let high = activePool.length - 1;
+        let matchedIndex = activePool.length - 1;
+
+        while (low <= high) {
+            let mid = Math.floor((low + high) / 2);
+            if (activePool[mid].threshold >= rand) {
+                matchedIndex = mid;
+                high = mid - 1;
+            } else {
+                low = mid + 1;
+            }
+        }
+        
+        stats[activePool[matchedIndex].name]++;
+    }
+
+    // 渲染結果
+    displayResults(stats, activePool, count);
+}
+
+function displayResults(stats, activePool, totalCount) {
+    const resultsSection = document.getElementById("results-section");
+    const totalDrawnText = document.getElementById("total-drawn-text");
+    const rareCountText = document.getElementById("rare-count-text");
+    const tableBody = document.getElementById("result-table-body");
+
+    // 計算大獎「戒指卷軸箱」的獲得數
+    const ringBoxCount = stats["戒指卷軸箱"] || 0;
+
+    totalDrawnText.innerHTML = `總共抽取：<strong>${totalCount.toLocaleString()}</strong> 次`;
+    rareCountText.innerHTML = `最大獎【<span class="rare">戒指卷軸箱 (0.0008333%)</span>】共獲得：<strong class="highlight">${ringBoxCount}</strong> 箱`;
+
+    tableBody.innerHTML = "";
+
+    activePool.forEach(item => {
+        const count = stats[item.name] || 0;
+        
+        // 關鍵修改：若道具獲得數量為 0，則跳過不顯示
+        if (count === 0) {
+            return; 
+        }
+
+        const actualPercentage = ((count / totalCount) * 100).toFixed(6);
+        const row = document.createElement("tr");
+        
+        // 特殊高亮大獎
+        let nameStyle = "";
+        if (item.name === "戒指卷軸箱") {
+            nameStyle = 'class="rare"';
+        } else if (item.rate < 0.1) {
+            nameStyle = 'class="highlight"';
+        }
+
+        row.innerHTML = `
+            <td ${nameStyle}>${item.name}</td>
+            <td>${count.toLocaleString()}</td>
+            <td>${actualPercentage}%</td>
+            <td>${item.rate.toFixed(7)}%</td>
+        `;
+        tableBody.appendChild(row);
+    });
+
+    resultsSection.style.display = "block";
+}
+</script>
+
+</body>
+</html>
